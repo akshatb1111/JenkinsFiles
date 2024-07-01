@@ -1,0 +1,61 @@
+pipeline {
+    agent {
+        label 'amazon-linux-2023-node'
+    }
+
+    environment {
+        WORK_DIR = '/mnt'
+        GIT_REPO = 'https://github.com/BKcore/HexGL.git'
+    }
+
+    stages {
+        stage('Clone Repository') {
+            steps {
+                dir("${WORK_DIR}/source") {
+                    git url: "${GIT_REPO}", branch: 'master'
+                }
+            }
+        }
+        
+        stage('Install Nginx') {
+            steps {
+                sh '''
+                sudo yum update -y
+                sudo amazon-linux-extras install nginx1 -y
+                sudo systemctl start nginx
+                sudo systemctl enable nginx
+                '''
+            }
+        }
+        
+        stage('Configure Nginx') {
+            steps {
+                script {
+                    def nginxConfig = """
+                    server {
+                        listen 80;
+                        server_name localhost;
+
+                        location / {
+                            root ${WORK_DIR}/source;
+                            index index.html index.htm;
+                        }
+                    }
+                    """
+                    writeFile file: "${WORK_DIR}/nginx.conf", text: nginxConfig
+                    sh '''
+                    sudo mv /etc/nginx/nginx.conf /etc/nginx/nginx.conf.backup
+                    sudo cp ${WORK_DIR}/nginx.conf /etc/nginx/nginx.conf
+                    sudo systemctl restart nginx
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            cleanWs()
+        }
+    }
+}
