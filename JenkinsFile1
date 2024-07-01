@@ -1,0 +1,61 @@
+pipeline {
+    agent {
+        label 'your-slave-node-label'
+    }
+    
+    environment {
+        WORK_DIR = '/mnt'
+        GIT_REPO = 'https://github.com/akshatb1111/maven-web-application.git'
+        MAVEN_HOME = tool name: 'Maven', type: 'hudson.tasks.Maven$MavenInstallation'
+        JAVA_HOME = tool name: 'JDK', type: 'hudson.model.JDK'
+        TOMCAT_VERSION = '9.0.56'
+        TOMCAT_URL = "https://downloads.apache.org/tomcat/tomcat-9/v${TOMCAT_VERSION}/bin/apache-tomcat-${TOMCAT_VERSION}.tar.gz"
+    }
+    
+    stages {
+        stage('Clone Repository') {
+            steps {
+                dir("${WORK_DIR}/source") {
+                    git url: "${GIT_REPO}", branch: 'main'
+                }
+            }
+        }
+        
+        stage('Build with Maven') {
+            steps {
+                dir("${WORK_DIR}/source") {
+                    sh "'${MAVEN_HOME}/bin/mvn' clean install"
+                }
+            }
+        }
+        
+        stage('Download and Configure Tomcat') {
+            steps {
+                dir("${WORK_DIR}") {
+                    script {
+                        def tomcatDir = "${WORK_DIR}/apache-tomcat-${TOMCAT_VERSION}"
+                        
+                        sh "curl -O ${TOMCAT_URL}"
+                        sh "tar -xzf apache-tomcat-${TOMCAT_VERSION}.tar.gz"
+                        sh "rm -rf ${tomcatDir}/webapps/ROOT"
+                        sh "cp ${WORK_DIR}/source/target/*.war ${tomcatDir}/webapps/ROOT.war"
+                    }
+                }
+            }
+        }
+        
+        stage('Start Tomcat') {
+            steps {
+                dir("${WORK_DIR}/apache-tomcat-${TOMCAT_VERSION}/bin") {
+                    sh './startup.sh'
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            cleanWs()
+        }
+    }
+}
